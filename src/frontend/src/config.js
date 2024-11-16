@@ -4,10 +4,11 @@ const config = {
     chatHistory: true, // Enable/disable chat history saving
     messageEditing: true, // Enable/disable message editing
     themeSwitching: true, // Enable/disable theme switching
+    showContext: true, // Enable/disable showing context in chat
   },
   ui: {
     initialTheme: 'light', // 'light' or 'dark'
-    sidebarDefaultOpen: true,
+    sidebarDefaultOpen: false,
     companyName: 'Company Name',
     companyLogo: '/logo512.png',
     authorSignature: '🚀 Marco Sanguineti, 2024',
@@ -15,7 +16,7 @@ const config = {
   chat: {
     initialMessage: "Hello! How can I help you today?",
     maxFileSize: 5 * 1024 * 1024, // 5MB in bytes
-    apiEndpoint: process.env.REACT_APP_API_ENDPOINT || 'http://0.0.0.0:8000/stream',
+    apiEndpoint: 'https://823f-2-34-26-173.ngrok-free.app/stream',
     assistant: {
       name: '⚙️ Chat Assistant',
       avatar: '/logo512.png',
