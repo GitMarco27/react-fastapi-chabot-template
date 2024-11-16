@@ -2,6 +2,57 @@ import { useState, useEffect, useRef } from "react";
 import { useTheme } from "./contexts/ThemeContext";
 import ReactMarkdown from 'react-markdown';
 import config from './config';
+import remarkGfm from 'remark-gfm';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { oneDark, oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
+
+const SuggestionCard = ({ icon, title, question, onClick, isDarkMode }) => (
+  <button
+    onClick={onClick}
+    className={`flex flex-col items-center p-4 rounded-lg transition-all transform hover:scale-105 w-full max-w-[240px] ${
+      isDarkMode
+        ? 'bg-gray-800 hover:bg-gray-700 text-gray-200'
+        : 'bg-gray-100 hover:bg-gray-200 text-gray-800'
+    }`}
+  >
+    <div className={`w-10 h-10 rounded-full flex items-center justify-center mb-2 ${
+      isDarkMode ? 'bg-gray-700' : 'bg-gray-200'
+    }`}>
+      {icon}
+    </div>
+    <h3 className="font-medium text-sm mb-1">{title}</h3>
+    <p className={`text-xs text-center ${
+      isDarkMode ? 'text-gray-400' : 'text-gray-600'
+    }`}>{question}</p>
+  </button>
+);
+
+const SuggestionIcon = ({ icon }) => {
+  const icons = {
+    lightbulb: (
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+        d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+    ),
+    code: (
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+        d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+    ),
+    settings: (
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+        d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+    ),
+    monitor: (
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+        d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+    )
+  };
+
+  return (
+    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      {icons[icon] || icons.lightbulb}
+    </svg>
+  );
+};
 
 function App() {
   const { isDarkMode, toggleTheme } = useTheme();
@@ -17,10 +68,19 @@ function App() {
   const [editingMessageIndex, setEditingMessageIndex] = useState(null);
   const messagesEndRef = useRef(null);
   const [loadedFiles, setLoadedFiles] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(true);
 
   useEffect(() => {
     localStorage.setItem('chatMessages', JSON.stringify(messages));
   }, [messages]);
+
+  useEffect(() => {
+    const textarea = document.querySelector('textarea');
+    if (textarea) {
+      textarea.style.height = 'auto';
+      textarea.style.height = `${textarea.scrollHeight}px`;
+    }
+  }, []);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -32,6 +92,7 @@ function App() {
 
   const handleSendMessage = async (e) => {
     e.preventDefault();
+    setShowSuggestions(false);
     if (newMessage.trim() && !isWaitingForBot) {
       const textarea = document.querySelector('textarea');
       if (textarea) textarea.style.height = 'auto';
@@ -69,7 +130,28 @@ function App() {
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let botResponse = "";
-        let contextData = null;
+
+        const processLine = (line, tempMessageIndex, currentResponse) => {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              if (data.type === 'context') {
+                setMessages(prev => prev.map((msg, index) =>
+                  index === tempMessageIndex ? { ...msg, context: data.data } : msg
+                ));
+              } else {
+                const updatedResponse = currentResponse + data.content;
+                setMessages(prev => prev.map((msg, index) =>
+                  index === tempMessageIndex ? { ...msg, text: updatedResponse } : msg
+                ));
+                return updatedResponse;
+              }
+            } catch (e) {
+              console.error('Error parsing SSE data:', e);
+            }
+          }
+          return currentResponse;
+        };
 
         while (true) {
           const { value, done } = await reader.read();
@@ -79,24 +161,7 @@ function App() {
           const lines = chunk.split('\n');
 
           for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              try {
-                const data = JSON.parse(line.slice(6));
-                if (data.type === 'context') {
-                  contextData = data.data;
-                  setMessages(prev => prev.map((msg, index) =>
-                    index === tempMessageIndex ? { ...msg, context: contextData } : msg
-                  ));
-                } else {
-                  botResponse += data.content;
-                  setMessages(prev => prev.map((msg, index) =>
-                    index === tempMessageIndex ? { ...msg, text: botResponse } : msg
-                  ));
-                }
-              } catch (e) {
-                console.error('Error parsing SSE data:', e);
-              }
-            }
+            botResponse = processLine(line, tempMessageIndex, botResponse);
           }
         }
       } catch (error) {
@@ -173,7 +238,28 @@ function App() {
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let botResponse = "";
-        let contextData = null;
+
+        const processLine = (line, tempMessageIndex, currentResponse) => {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              if (data.type === 'context') {
+                setMessages(prev => prev.map((msg, index) =>
+                  index === tempMessageIndex ? { ...msg, context: data.data } : msg
+                ));
+              } else {
+                const updatedResponse = currentResponse + data.content;
+                setMessages(prev => prev.map((msg, index) =>
+                  index === tempMessageIndex ? { ...msg, text: updatedResponse } : msg
+                ));
+                return updatedResponse;
+              }
+            } catch (e) {
+              console.error('Error parsing SSE data:', e);
+            }
+          }
+          return currentResponse;
+        };
 
         while (true) {
           const { value, done } = await reader.read();
@@ -183,24 +269,7 @@ function App() {
           const lines = chunk.split('\n');
 
           for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              try {
-                const data = JSON.parse(line.slice(6));
-                if (data.type === 'context') {
-                  contextData = data.data;
-                  setMessages(prev => prev.map((msg, index) =>
-                    index === tempMessageIndex ? { ...msg, context: contextData } : msg
-                  ));
-                } else {
-                  botResponse += data.content;
-                  setMessages(prev => prev.map((msg, index) =>
-                    index === tempMessageIndex ? { ...msg, text: botResponse } : msg
-                  ));
-                }
-              } catch (e) {
-                console.error('Error parsing SSE data:', e);
-              }
-            }
+            botResponse = processLine(line, tempMessageIndex, botResponse);
           }
         }
       } catch (error) {
@@ -253,8 +322,96 @@ function App() {
       ];
       setMessages(initialMessage);
       setLoadedFiles([]);
+      setShowSuggestions(true);
       localStorage.setItem('chatMessages', JSON.stringify(initialMessage));
     }
+  };
+
+  const handleSuggestionClick = (question) => {
+    setShowSuggestions(false);
+
+    // Directly send the message
+    const userMessage = question;
+    setMessages(prev => [...prev, { text: userMessage, sender: "user" }]);
+
+    // Start the bot response process
+    setIsWaitingForBot(true);
+
+    const sendQuestion = async () => {
+      try {
+        const tempMessageIndex = messages.length + 1;
+        setMessages(prev => [...prev, { text: "", sender: "bot" }]);
+
+        const conversationHistory = messages.map(msg => ({
+          text: msg.text,
+          sender: msg.sender
+        }));
+
+        const response = await fetch(config.chat.apiEndpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            content: userMessage,
+            files: loadedFiles.map(file => ({
+              name: file.name,
+              content: file.content,
+              type: file.type
+            })),
+            history: conversationHistory
+          }),
+        });
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let botResponse = "";
+
+        const processLine = (line, tempMessageIndex, currentResponse) => {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              if (data.type === 'context') {
+                setMessages(prev => prev.map((msg, index) =>
+                  index === tempMessageIndex ? { ...msg, context: data.data } : msg
+                ));
+              } else {
+                const updatedResponse = currentResponse + data.content;
+                setMessages(prev => prev.map((msg, index) =>
+                  index === tempMessageIndex ? { ...msg, text: updatedResponse } : msg
+                ));
+                return updatedResponse;
+              }
+            } catch (e) {
+              console.error('Error parsing SSE data:', e);
+            }
+          }
+          return currentResponse;
+        };
+
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+
+          const chunk = decoder.decode(value);
+          const lines = chunk.split('\n');
+
+          for (const line of lines) {
+            botResponse = processLine(line, tempMessageIndex, botResponse);
+          }
+        }
+      } catch (error) {
+        console.error('Error:', error);
+        setMessages(prev => [...prev, {
+          text: "Sorry, there was an error processing your request.",
+          sender: "bot"
+        }]);
+      } finally {
+        setIsWaitingForBot(false);
+      }
+    };
+
+    sendQuestion();
   };
 
   const MessageContext = ({ context }) => {
@@ -396,8 +553,7 @@ function App() {
           {/* Author signature - fixed at bottom */}
           <div className={`fixed bottom-0 z-10 overflow-hidden
             ${isSidebarOpen ? 'w-[50%] md:w-[20%] visible' : 'w-0 invisible'}
-            ${isDarkMode ? 'bg-[#171717] border-gray-700 text-gray-400' : 'bg-[#F9F9F9] border-gray-200 text-gray-500'}
-            border-t`}
+            ${isDarkMode ? 'bg-[#171717] text-gray-400' : 'bg-[#F9F9F9] text-gray-500'}`}
           >
             <div className="p-4 text-sm text-center whitespace-nowrap">
               Marco Sanguineti, 2024
@@ -491,88 +647,164 @@ function App() {
             </div>
           </div>
 
-          {/* Chat messages area - modified with padding top and bottom to account for fixed header and input */}
+          {/* Chat messages area */}
           <div className="flex-1 overflow-y-auto p-4 pt-[80px] pb-[100px] space-y-4">
-            {messages.map((message, index) => (
-              <div
-                key={index}
-                className={`flex ${message.sender === "user" ? "justify-end" : "justify-start"}`}
-              >
-                {message.sender === "bot" && (
-                  <img
-                    src={config.chat.assistant.avatar}
-                    alt="Assistant Avatar"
-                    className="w-8 h-8 rounded-lg mr-2 self-start mt-4"
-                  />
-                )}
-                <div className={`relative group max-w-[70%]`}>
-                  {message.sender === "user" && (
-                    <button
-                      onClick={() => handleEditMessage(index)}
-                      className={`absolute -left-8 top-1/2 transform -translate-y-1/2 p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity ${isDarkMode ? 'hover:bg-gray-700 text-gray-300' : 'hover:bg-gray-200 text-gray-600'
-                        }`}
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                          d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                      </svg>
-                    </button>
-                  )}
-                  <div
-                    className={`p-4 rounded-2xl break-words ${message.sender === "user"
-                        ? isDarkMode
-                          ? "bg-[#2F2F2F] text-white"
-                          : "bg-[#F3F3F3] text-gray-800"
-                        : isDarkMode
-                          ? "text-white"
-                          : "text-gray-800"
-                    } ${index === editingMessageIndex ? 'ring-2 ring-blue-500' : ''}`}
-                  >
-                    {message.sender === "bot" ? (
-                      <>
-                        <ReactMarkdown
-                          className={`prose ${isDarkMode ? 'prose-invert' : ''} max-w-none`}
-                          components={{
-                            // Style code blocks
-                            code: ({ node, inline, className, children, ...props }) => (
-                              <code
-                                className={`${inline ? 'bg-opacity-25 px-1 py-0.5 rounded' : 'block p-2 rounded-lg'} ${isDarkMode
-                                    ? 'bg-gray-700 text-gray-100'
-                                    : 'bg-gray-100 text-gray-800'
-                                  } ${className || ''}`}
-                                {...props}
-                              >
-                                {children}
-                              </code>
-                            ),
-                            // Style links
-                            a: ({ node, className, children, ...props }) => (
-                              <a
-                                className={`text-blue-500 hover:underline ${className || ''}`}
-                                {...props}
-                              >
-                                {children}
-                              </a>
-                            ),
-                          }}
-                        >
-                          {message.text}
-                        </ReactMarkdown>
-                        {message.context && <MessageContext context={message.context} />}
-                      </>
-                    ) : (
-                      <span className="whitespace-pre-wrap">{message.text}</span>
-                    )}
-                    {index === editingMessageIndex && (
-                      <span className="ml-2 text-xs text-blue-500 font-medium">
-                        (editing...)
-                      </span>
-                    )}
-                  </div>
+            {showSuggestions && messages.length === 1 && config.features.showSuggestionCards ? (
+              <div className="h-full flex items-center justify-center p-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-3xl">
+                  {config.suggestionCards.cards.map((suggestion, index) => (
+                    <SuggestionCard
+                      key={index}
+                      icon={<SuggestionIcon icon={suggestion.icon} />}
+                      title={suggestion.title}
+                      question={suggestion.question}
+                      onClick={() => handleSuggestionClick(suggestion.question)}
+                      isDarkMode={isDarkMode}
+                    />
+                  ))}
                 </div>
               </div>
-            ))}
-            <div ref={messagesEndRef} />
+            ) : (
+              <>
+                {messages.map((message, index) => (
+                  <div
+                    key={index}
+                    className={`flex ${message.sender === "user" ? "justify-end" : "justify-start"}`}
+                  >
+                    {message.sender === "bot" && (
+                      <img
+                        src={config.chat.assistant.avatar}
+                        alt="Assistant Avatar"
+                        className="w-8 h-8 rounded-lg mr-2 self-start mt-4"
+                      />
+                    )}
+                    <div className={`relative group max-w-[70%]`}>
+                      {message.sender === "user" && (
+                        <button
+                          onClick={() => handleEditMessage(index)}
+                          className={`absolute -left-8 top-1/2 transform -translate-y-1/2 p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity ${isDarkMode ? 'hover:bg-gray-700 text-gray-300' : 'hover:bg-gray-200 text-gray-600'
+                            }`}
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                              d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                        </button>
+                      )}
+                      <div
+                        className={`p-4 rounded-2xl break-words ${message.sender === "user"
+                            ? isDarkMode
+                              ? "bg-[#2F2F2F] text-white"
+                              : "bg-[#F3F3F3] text-gray-800"
+                            : isDarkMode
+                              ? "text-white"
+                              : "text-gray-800"
+                        } ${index === editingMessageIndex ? 'ring-2 ring-blue-500' : ''}`}
+                      >
+                        {message.sender === "bot" ? (
+                          <>
+                            <ReactMarkdown
+                              className={`prose ${isDarkMode ? 'prose-invert' : ''} max-w-none [&_pre]:bg-transparent [&_pre]:p-0`}
+                              remarkPlugins={[remarkGfm]}
+                              components={{
+                                code: ({ node, inline, className, children, ...props }) => {
+                                  if (inline) {
+                                    return (
+                                      <code
+                                        className={`font-mono text-sm px-1 rounded inline-block ${
+                                          isDarkMode
+                                            ? 'bg-gray-800 text-gray-200'
+                                            : 'bg-gray-100 text-gray-800'
+                                        }`}
+                                        style={{ whiteSpace: 'pre-wrap', display: 'inline' }}
+                                        {...props}
+                                      >
+                                        {children}
+                                      </code>
+                                    );
+                                  }
+
+                                  const match = /language-(\w+)/.exec(className || '');
+                                  const language = match ? match[1] : '';
+
+                                  const [lang, ...pathParts] = language.split(':');
+                                  const filePath = pathParts.join(':');
+
+                                  return (
+                                    <div className={`rounded-lg overflow-hidden my-4`}>
+                                      {filePath && (
+                                        <div className={`px-4 py-2 text-sm border-b ${
+                                          isDarkMode
+                                            ? 'bg-gray-700 border-gray-600 text-gray-200'
+                                            : 'bg-gray-200 border-gray-300 text-gray-700'
+                                        }`}>
+                                          {filePath}
+                                        </div>
+                                      )}
+                                      <SyntaxHighlighter
+                                        language={lang || 'text'}
+                                        style={isDarkMode ? oneDark : oneLight}
+                                        customStyle={{
+                                          margin: 0,
+                                          padding: '1rem',
+                                        }}
+                                        {...props}
+                                      >
+                                        {String(children).replace(/\n$/, '')}
+                                      </SyntaxHighlighter>
+                                    </div>
+                                  );
+                                },
+                                a: ({ node, className, children, ...props }) => (
+                                  <a
+                                    className={`text-blue-500 hover:underline ${className || ''}`}
+                                    {...props}
+                                  >
+                                    {children}
+                                  </a>
+                                ),
+                                table: ({node, ...props}) => (
+                                  <table className={`border-collapse my-4 w-full ${
+                                    isDarkMode
+                                      ? 'border-gray-700 text-gray-200'
+                                      : 'border-gray-200 text-gray-800'
+                                  }`} {...props} />
+                                ),
+                                th: ({node, ...props}) => (
+                                  <th className={`border p-2 font-semibold ${
+                                    isDarkMode
+                                      ? 'border-gray-700 bg-gray-800'
+                                      : 'border-gray-200 bg-gray-100'
+                                  }`} {...props} />
+                                ),
+                                td: ({node, ...props}) => (
+                                  <td className={`border p-2 ${
+                                    isDarkMode
+                                      ? 'border-gray-700 bg-gray-900/50'
+                                      : 'border-gray-200 bg-white'
+                                  }`} {...props} />
+                                ),
+                              }}
+                            >
+                              {message.text}
+                            </ReactMarkdown>
+                            {message.context && <MessageContext context={message.context} />}
+                          </>
+                        ) : (
+                          <span className="whitespace-pre-wrap">{message.text}</span>
+                        )}
+                        {index === editingMessageIndex && (
+                          <span className="ml-2 text-xs text-blue-500 font-medium">
+                            (editing...)
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                <div ref={messagesEndRef} />
+              </>
+            )}
           </div>
 
           {/* Message input form - modified with fixed positioning */}
@@ -583,17 +815,17 @@ function App() {
           >
             <form
               onSubmit={editingMessageIndex !== null ? handleEditSubmit : handleSendMessage}
-              className={`p-4 border-t ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}
+              className="p-4"
             >
               <div className="flex space-x-4">
                 <textarea
                   value={newMessage}
                   onChange={(e) => {
                     setNewMessage(e.target.value);
-                    // Reset height before calculating new height
                     e.target.style.height = 'auto';
-                    // Set new height based on scrollHeight
-                    e.target.style.height = `${e.target.scrollHeight}px`;
+                    const maxHeight = 200; // Maximum height in pixels
+                    const scrollHeight = Math.min(e.target.scrollHeight, maxHeight);
+                    e.target.style.height = `${scrollHeight}px`;
                   }}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && !e.shiftKey) {
@@ -607,10 +839,10 @@ function App() {
                   }}
                   placeholder={editingMessageIndex !== null ? config.chat.assistant.editPlaceholderText : config.chat.assistant.placeholderText}
                   rows="1"
-                  className={`flex-1 p-2 border rounded-2xl focus:outline-none resize-none overflow-hidden min-h-[40px] max-h-[200px] ${isDarkMode
-                      ? 'bg-[#2F2F2F] border-gray-600 text-white placeholder-gray-400 focus:border-gray-500'
-                      : 'bg-[#F3F3F3] border-gray-300 text-gray-900 focus:border-gray-400'
-                    } ${editingMessageIndex !== null ? 'ring-2 ring-blue-500' : ''}`}
+                  className={`flex-1 px-4 py-3 border rounded-3xl focus:outline-none resize-none overflow-y-auto h-[40px] max-h-[200px] ${isDarkMode
+                    ? 'bg-[#2F2F2F] border-gray-600 text-white placeholder-gray-400 focus:border-gray-500'
+                    : 'bg-[#F3F3F3] border-gray-300 text-gray-900 focus:border-gray-400'
+                  } ${editingMessageIndex !== null ? 'ring-2 ring-blue-500' : ''}`}
                 />
                 {editingMessageIndex !== null && (
                   <button

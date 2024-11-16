@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
-from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel
 
@@ -16,6 +16,7 @@ model = ChatOpenAI(model="gpt-4o-mini")
 
 SYSTEM_MESSAGE = """\
 You are an expert assistant. Answer the user's question and be friendly.
+Format your responses in markdown.
 """
 
 
@@ -47,7 +48,9 @@ def read_root():
     return {"message": "Lo sapevi? Did you know?"}
 
 
-async def message_generator(user_message: str, files: List[FileData], history: List[dict]):
+async def message_generator(
+    user_message: str, files: List[FileData], history: List[dict]
+):
     messages = [SystemMessage(content=SYSTEM_MESSAGE)]
 
     for msg in history:
@@ -69,8 +72,8 @@ async def message_generator(user_message: str, files: List[FileData], history: L
         "data": {
             "sources": ["example.txt", "reference.md"],
             "additional_info": "This response was generated using...",
-            "confidence": 0.95
-        }
+            "confidence": 0.95,
+        },
     }
     yield f"data: {json.dumps(context)}\n\n"
 

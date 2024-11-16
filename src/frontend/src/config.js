@@ -5,6 +5,7 @@ const config = {
     messageEditing: true, // Enable/disable message editing
     themeSwitching: true, // Enable/disable theme switching
     showContext: true, // Enable/disable showing context in chat
+    showSuggestionCards: true, // Toggle suggestion cards visibility
   },
   ui: {
     initialTheme: 'light', // 'light' or 'dark'
@@ -24,6 +25,30 @@ const config = {
       placeholderText: 'Type your message...',
       editPlaceholderText: 'Edit message...',
     }
+  },
+  suggestionCards: {
+    cards: [
+      {
+        icon: "lightbulb", // This will be mapped to the SVG in App.js
+        title: "Code Analysis",
+        question: "Can you review my code for potential improvements?"
+      },
+      {
+        icon: "code",
+        title: "Debug Help",
+        question: "I'm getting an error in my code. Can you help me fix it?"
+      },
+      {
+        icon: "settings",
+        title: "Best Practices",
+        question: "What are the best practices for state management in React?"
+      },
+      {
+        icon: "monitor",
+        title: "New Features",
+        question: "How can I implement authentication in my app?"
+      }
+    ]
   }
 };
 
