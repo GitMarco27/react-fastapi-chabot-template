@@ -54,6 +54,117 @@ const SuggestionIcon = ({ icon }) => {
   );
 };
 
+const MessageFeedback = ({ isDarkMode, onFeedback, existingFeedback }) => {
+  const [feedback, setFeedback] = useState(existingFeedback?.type || null);
+  const [showCommentInput, setShowCommentInput] = useState(false);
+  const [comment, setComment] = useState(existingFeedback?.comment || '');
+
+  const handleFeedback = async (isPositive) => {
+    if (feedback === (isPositive ? 'positive' : 'negative')) {
+      setFeedback(null);
+      onFeedback(null);
+    } else {
+      setFeedback(isPositive ? 'positive' : 'negative');
+      onFeedback(isPositive ? 'positive' : 'negative', comment);
+      setShowCommentInput(true);
+    }
+  };
+
+  const handleCancel = () => {
+    setShowCommentInput(false);
+    setComment('');
+    setFeedback(null); // Reset feedback when canceling
+    onFeedback(null); // Reset feedback in parent component
+  };
+
+  const handleCommentSubmit = (e) => {
+    e.preventDefault();
+    onFeedback(feedback, comment);
+    setShowCommentInput(false);
+    setComment('');
+  };
+
+  return (
+    <div className="mt-2">
+      <div className="flex items-center space-x-2">
+        <button
+          onClick={() => handleFeedback(true)}
+          className={`p-1 rounded ${
+            feedback === 'positive'
+              ? isDarkMode
+                ? 'bg-green-900/30 text-green-400'
+                : 'bg-green-100 text-green-600'
+              : isDarkMode
+              ? 'text-gray-400 hover:text-gray-300'
+              : 'text-gray-500 hover:text-gray-600'
+          }`}
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+              d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5" />
+          </svg>
+        </button>
+        <button
+          onClick={() => handleFeedback(false)}
+          className={`p-1 rounded ${
+            feedback === 'negative'
+              ? isDarkMode
+                ? 'bg-red-900/30 text-red-400'
+                : 'bg-red-100 text-red-600'
+              : isDarkMode
+              ? 'text-gray-400 hover:text-gray-300'
+              : 'text-gray-500 hover:text-gray-600'
+          }`}
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+              d="M10 14H5.236a2 2 0 01-1.789-2.894l3.5-7A2 2 0 018.736 3h4.018c.163 0 .326.02.485.06L17 4m-7 10v2a2 2 0 002 2h.095c.5 0 .905-.405.905-.905 0-.714.211-1.412.608-2.006L17 13V4m-7 10h2m5 0h2a2 2 0 002-2v-6a2 2 0 00-2-2h-2.5" />
+          </svg>
+        </button>
+      </div>
+
+      {showCommentInput && (
+        <form onSubmit={handleCommentSubmit} className="mt-2">
+          <input
+            type="text"
+            value={comment}
+            onChange={(e) => setComment(e.target.value)}
+            placeholder="Add a comment (optional)"
+            className={`w-full px-3 py-2 text-sm rounded-lg ${
+              isDarkMode
+                ? 'bg-gray-800 text-gray-200 border border-gray-700'
+                : 'bg-gray-100 text-gray-800 border border-gray-200'
+            }`}
+          />
+          <div className="flex justify-end space-x-2 mt-2">
+            <button
+              type="button"
+              onClick={handleCancel}
+              className={`px-3 py-1 text-sm rounded ${
+                isDarkMode
+                  ? 'bg-gray-800 text-gray-200 hover:bg-gray-700'
+                  : 'bg-gray-200 text-gray-800 hover:bg-gray-300'
+              }`}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className={`px-3 py-1 text-sm rounded ${
+                isDarkMode
+                  ? 'bg-blue-600 text-white hover:bg-blue-700'
+                  : 'bg-blue-500 text-white hover:bg-blue-600'
+              }`}
+            >
+              Submit
+            </button>
+          </div>
+        </form>
+      )}
+    </div>
+  );
+};
+
 function App() {
   const { isDarkMode, toggleTheme } = useTheme();
   const [isSidebarOpen, setSidebarOpen] = useState(true);
@@ -69,6 +180,10 @@ function App() {
   const messagesEndRef = useRef(null);
   const [loadedFiles, setLoadedFiles] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(true);
+  const [messageFeedbacks, setMessageFeedbacks] = useState(() => {
+    const savedFeedbacks = localStorage.getItem('messageFeedbacks');
+    return savedFeedbacks ? JSON.parse(savedFeedbacks) : {};
+  });
 
   useEffect(() => {
     localStorage.setItem('chatMessages', JSON.stringify(messages));
@@ -81,6 +196,10 @@ function App() {
       textarea.style.height = `${textarea.scrollHeight}px`;
     }
   }, []);
+
+  useEffect(() => {
+    localStorage.setItem('messageFeedbacks', JSON.stringify(messageFeedbacks));
+  }, [messageFeedbacks]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -323,7 +442,9 @@ function App() {
       setMessages(initialMessage);
       setLoadedFiles([]);
       setShowSuggestions(true);
+      setMessageFeedbacks({});
       localStorage.setItem('chatMessages', JSON.stringify(initialMessage));
+      localStorage.removeItem('messageFeedbacks');
     }
   };
 
@@ -461,6 +582,26 @@ function App() {
         )}
       </div>
     );
+  };
+
+  const handleMessageFeedback = (messageIndex, feedbackType, comment) => {
+    setMessageFeedbacks(prev => ({
+      ...prev,
+      [messageIndex]: { type: feedbackType, comment, timestamp: new Date().toISOString() }
+    }));
+
+    // Here you can also send the feedback to your backend
+    // Example:
+    // fetch('/api/feedback', {
+    //   method: 'POST',
+    //   headers: { 'Content-Type': 'application/json' },
+    //   body: JSON.stringify({
+    //     messageIndex,
+    //     feedbackType,
+    //     comment,
+    //     messageContent: messages[messageIndex].text
+    //   })
+    // });
   };
 
   return (
@@ -789,6 +930,11 @@ function App() {
                               {message.text}
                             </ReactMarkdown>
                             {message.context && <MessageContext context={message.context} />}
+                            <MessageFeedback
+                              isDarkMode={isDarkMode}
+                              onFeedback={(feedbackType, comment) => handleMessageFeedback(index, feedbackType, comment)}
+                              existingFeedback={messageFeedbacks[index]}
+                            />
                           </>
                         ) : (
                           <span className="whitespace-pre-wrap">{message.text}</span>
