@@ -23,6 +23,11 @@ uv sync
 uv run uvicorn main:app --reload
 ```
 
+### 🐳 Docker Compose [Local]
+
+```bash
+docker compose --env-file .env.compose up --build
+```
 
 ### 🔨 Preview
 
