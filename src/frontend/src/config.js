@@ -17,7 +17,7 @@ const config = {
   chat: {
     initialMessage: "Hello! How can I help you today?",
     maxFileSize: 5 * 1024 * 1024, // 5MB in bytes
-    apiEndpoint: process.env.REACT_APP_API_ENDPOINT,
+    apiEndpoint: process.env.REACT_APP_API_ENDPOINT || "http://localhost:8000/stream",
     assistant: {
       name: '⚙️ Chat Assistant',
       avatar: '/logo512.png',
