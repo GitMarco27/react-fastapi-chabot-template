@@ -66,7 +66,7 @@ async def message_generator(
         yield f"data: {data}\n\n"
 
     # Send additional context at the end of the stream
-    # This is just an example - modify the context data as needed
+    # This is just an example
     context = {
         "type": "context",
         "data": {

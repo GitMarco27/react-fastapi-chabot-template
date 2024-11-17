@@ -17,7 +17,7 @@ const config = {
   chat: {
     initialMessage: "Hello! How can I help you today?",
     maxFileSize: 5 * 1024 * 1024, // 5MB in bytes
-    apiEndpoint: 'https://823f-2-34-26-173.ngrok-free.app/stream',
+    apiEndpoint: process.env.REACT_APP_API_ENDPOINT,
     assistant: {
       name: '⚙️ Chat Assistant',
       avatar: '/logo512.png',
