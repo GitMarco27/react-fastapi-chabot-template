@@ -56,32 +56,16 @@ const SuggestionIcon = ({ icon }) => {
 
 const MessageFeedback = ({ isDarkMode, onFeedback, existingFeedback }) => {
   const [feedback, setFeedback] = useState(existingFeedback?.type || null);
-  const [showCommentInput, setShowCommentInput] = useState(false);
-  const [comment, setComment] = useState(existingFeedback?.comment || '');
 
   const handleFeedback = async (isPositive) => {
     if (feedback === (isPositive ? 'positive' : 'negative')) {
       setFeedback(null);
       onFeedback(null);
     } else {
-      setFeedback(isPositive ? 'positive' : 'negative');
-      onFeedback(isPositive ? 'positive' : 'negative', comment);
-      setShowCommentInput(true);
+      const newFeedback = isPositive ? 'positive' : 'negative';
+      setFeedback(newFeedback);
+      onFeedback(newFeedback);
     }
-  };
-
-  const handleCancel = () => {
-    setShowCommentInput(false);
-    setComment('');
-    setFeedback(null); // Reset feedback when canceling
-    onFeedback(null); // Reset feedback in parent component
-  };
-
-  const handleCommentSubmit = (e) => {
-    e.preventDefault();
-    onFeedback(feedback, comment);
-    setShowCommentInput(false);
-    setComment('');
   };
 
   return (
@@ -122,45 +106,6 @@ const MessageFeedback = ({ isDarkMode, onFeedback, existingFeedback }) => {
           </svg>
         </button>
       </div>
-
-      {showCommentInput && (
-        <form onSubmit={handleCommentSubmit} className="mt-2">
-          <input
-            type="text"
-            value={comment}
-            onChange={(e) => setComment(e.target.value)}
-            placeholder="Add a comment (optional)"
-            className={`w-full px-3 py-2 text-sm rounded-lg ${
-              isDarkMode
-                ? 'bg-gray-800 text-gray-200 border border-gray-700'
-                : 'bg-gray-100 text-gray-800 border border-gray-200'
-            }`}
-          />
-          <div className="flex justify-end space-x-2 mt-2">
-            <button
-              type="button"
-              onClick={handleCancel}
-              className={`px-3 py-1 text-sm rounded ${
-                isDarkMode
-                  ? 'bg-gray-800 text-gray-200 hover:bg-gray-700'
-                  : 'bg-gray-200 text-gray-800 hover:bg-gray-300'
-              }`}
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className={`px-3 py-1 text-sm rounded ${
-                isDarkMode
-                  ? 'bg-blue-600 text-white hover:bg-blue-700'
-                  : 'bg-blue-500 text-white hover:bg-blue-600'
-              }`}
-            >
-              Submit
-            </button>
-          </div>
-        </form>
-      )}
     </div>
   );
 };
@@ -584,24 +529,11 @@ function App() {
     );
   };
 
-  const handleMessageFeedback = (messageIndex, feedbackType, comment) => {
+  const handleMessageFeedback = (messageIndex, feedbackType) => {
     setMessageFeedbacks(prev => ({
       ...prev,
-      [messageIndex]: { type: feedbackType, comment, timestamp: new Date().toISOString() }
+      [messageIndex]: { type: feedbackType, timestamp: new Date().toISOString() }
     }));
-
-    // Here you can also send the feedback to your backend
-    // Example:
-    // fetch('/api/feedback', {
-    //   method: 'POST',
-    //   headers: { 'Content-Type': 'application/json' },
-    //   body: JSON.stringify({
-    //     messageIndex,
-    //     feedbackType,
-    //     comment,
-    //     messageContent: messages[messageIndex].text
-    //   })
-    // });
   };
 
   return (
@@ -932,7 +864,7 @@ function App() {
                             {message.context && <MessageContext context={message.context} />}
                             <MessageFeedback
                               isDarkMode={isDarkMode}
-                              onFeedback={(feedbackType, comment) => handleMessageFeedback(index, feedbackType, comment)}
+                              onFeedback={(feedbackType) => handleMessageFeedback(index, feedbackType)}
                               existingFeedback={messageFeedbacks[index]}
                             />
                           </>

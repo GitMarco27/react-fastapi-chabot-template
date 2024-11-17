@@ -43,9 +43,9 @@ app.add_middleware(
 )
 
 
-@app.get("/")
-def read_root():
-    return {"message": "Lo sapevi? Did you know?"}
+@app.get("/health")
+def health():
+    return {"message": "OK"}
 
 
 async def message_generator(
